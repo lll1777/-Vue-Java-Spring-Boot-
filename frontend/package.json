@@ -1,0 +1,35 @@
+{
+  "name": "ticket-management-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build",
+    "lint": "vue-cli-service lint"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "core-js": "^3.33.0",
+    "dayjs": "^1.11.10",
+    "element-ui": "^2.15.14",
+    "lodash": "^4.17.21",
+    "vue": "^2.7.15",
+    "vue-router": "^3.6.5",
+    "vuex": "^3.6.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@vue/cli-plugin-babel": "~5.0.8",
+    "@vue/cli-plugin-router": "~5.0.8",
+    "@vue/cli-plugin-vuex": "~5.0.8",
+    "@vue/cli-service": "~5.0.8",
+    "sass": "^1.69.5",
+    "sass-loader": "^13.3.2",
+    "vue-template-compiler": "^2.7.15"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}
