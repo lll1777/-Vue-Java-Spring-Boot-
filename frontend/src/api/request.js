@@ -2,6 +2,7 @@ import axios from 'axios'
 import { MessageBox, Message } from 'element-ui'
 import store from '@/store'
 import { getToken } from '@/utils/auth'
+import { checkApiAccess, isAdmin } from '@/utils/permission'
 
 const service = axios.create({
   baseURL: process.env.VUE_APP_BASE_API || '/api',
@@ -13,6 +14,22 @@ service.interceptors.request.use(
     if (store.getters.token) {
       config.headers['Authorization'] = 'Bearer ' + getToken()
     }
+    
+    const url = config.url || ''
+    const accessCheck = checkApiAccess(url)
+    
+    if (!accessCheck.allowed) {
+      Message({
+        message: accessCheck.message || '权限不足',
+        type: 'error',
+        duration: 5 * 1000
+      })
+      
+      return Promise.reject(new Error(accessCheck.message || '权限不足'))
+    }
+    
+    console.log(`[Request] ${config.method?.toUpperCase()} ${url} - Admin: ${isAdmin()}`)
+    
     return config
   },
   error => {
@@ -55,13 +72,23 @@ service.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 400:
-          message = '请求参数错误'
+          message = error.response.data?.message || '请求参数错误'
           break
         case 401:
           message = '未授权，请重新登录'
+          MessageBox.confirm('您的登录已过期，请重新登录', '系统提示', {
+            confirmButtonText: '重新登录',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }).then(() => {
+            store.dispatch('user/resetToken').then(() => {
+              location.reload()
+            })
+          })
           break
         case 403:
-          message = '拒绝访问'
+          message = error.response.data?.message || '拒绝访问：权限不足'
+          console.warn('[403 Forbidden] - User attempted unauthorized operation')
           break
         case 404:
           message = '请求地址不存在'
