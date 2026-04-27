@@ -6,7 +6,14 @@ import ElementUI from 'element-ui'
 import 'element-ui/lib/theme-chalk/index.css'
 import './styles/index.scss'
 import * as filters from './utils/filters'
-import { PermissionDirective, RoleDirective, LevelDirective } from './utils/permission'
+import {
+  PermissionDirective,
+  RoleDirective,
+  LevelDirective,
+  AdminOnlyDirective,
+  TicketViewDirective,
+  TicketEditDirective
+} from './utils/permission'
 
 Vue.config.productionTip = false
 
@@ -19,6 +26,9 @@ Object.keys(filters).forEach(key => {
 Vue.directive('permission', PermissionDirective)
 Vue.directive('role', RoleDirective)
 Vue.directive('level', LevelDirective)
+Vue.directive('admin-only', AdminOnlyDirective)
+Vue.directive('ticket-view', TicketViewDirective)
+Vue.directive('ticket-edit', TicketEditDirective)
 
 new Vue({
   router,

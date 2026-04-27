@@ -2,7 +2,8 @@ import Vue from 'vue'
 import VueRouter from 'vue-router'
 import Layout from '@/layout/index.vue'
 import { getToken } from '@/utils/auth'
-import { hasPermission, hasRole } from '@/utils/permission'
+import { checkRouteAccess, isAdmin } from '@/utils/permission'
+import store from '@/store'
 
 Vue.use(VueRouter)
 
@@ -115,13 +116,22 @@ const routes = [
     component: Layout,
     redirect: '/batch/process',
     name: 'Batch',
-    meta: { title: '批量处理', icon: 'el-icon-copy-document', permission: 'TICKET_BATCH_ASSIGN', adminOnly: true },
+    meta: { 
+      title: '批量处理', 
+      icon: 'el-icon-copy-document', 
+      permission: 'TICKET_BATCH_ASSIGN', 
+      adminOnly: true 
+    },
     children: [
       {
         path: 'process',
         name: 'BatchProcess',
         component: () => import('@/views/batch/process.vue'),
-        meta: { title: '批量处理', permission: 'TICKET_BATCH_ASSIGN', adminOnly: true }
+        meta: { 
+          title: '批量处理', 
+          permission: 'TICKET_BATCH_ASSIGN', 
+          adminOnly: true 
+        }
       }
     ]
   },
@@ -178,7 +188,12 @@ const routes = [
     component: Layout,
     redirect: '/system/user',
     name: 'System',
-    meta: { title: '系统管理', icon: 'el-icon-setting', permission: 'ROLE_ADMIN', adminOnly: true },
+    meta: { 
+      title: '系统管理', 
+      icon: 'el-icon-setting', 
+      permission: 'ROLE_ADMIN', 
+      adminOnly: true 
+    },
     children: [
       {
         path: 'user',
@@ -205,6 +220,10 @@ const routes = [
         meta: { title: 'SLA配置', permission: 'ROLE_ADMIN', adminOnly: true }
       }
     ]
+  },
+  {
+    path: '*',
+    redirect: '/404'
   }
 ]
 
@@ -244,20 +263,18 @@ router.beforeEach(async (to, from, next) => {
     }
   }
 
-  if (to.meta.adminOnly) {
-    if (!hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
-      next({ path: '/403' })
-      return
-    }
+  const accessCheck = checkRouteAccess(to)
+  
+  if (!accessCheck.allowed) {
+    console.warn(`[Route Forbidden] User attempted to access: ${to.fullPath}`)
+    console.warn(`  - Reason: ${accessCheck.message}`)
+    console.warn(`  - User is admin: ${isAdmin()}`)
+    
+    next({ path: '/403' })
+    return
   }
 
-  if (to.meta.permission) {
-    if (!hasPermission(to.meta.permission)) {
-      next({ path: '/403' })
-      return
-    }
-  }
-
+  console.log(`[Route Allowed] ${to.fullPath} - Admin: ${isAdmin()}`)
   next()
 })
 

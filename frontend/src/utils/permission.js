@@ -1,10 +1,27 @@
 import store from '@/store'
 
+const ADMIN_ROLES = ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_SYSTEM_ADMIN']
+
+const ADMIN_ONLY_ROUTES = [
+  '/batch',
+  '/system',
+  '/report/config',
+  '/approval/config'
+]
+
+const BATCH_OPERATION_PATHS = [
+  '/api/batch/assign',
+  '/api/batch/status',
+  '/api/batch/close',
+  '/api/batch/resolve',
+  '/api/batch/assign/async'
+]
+
 export function hasPermission(permission) {
   const permissions = store.getters.permissions || []
   const roles = store.getters.roles || []
   
-  if (roles.includes('ROLE_ADMIN') || roles.includes('ROLE_SUPER_ADMIN')) {
+  if (isAdmin()) {
     return true
   }
   
@@ -27,7 +44,7 @@ export function hasAllPermissions(permissions) {
 export function hasRole(role) {
   const roles = store.getters.roles || []
   
-  if (roles.includes('ROLE_ADMIN') || roles.includes('ROLE_SUPER_ADMIN')) {
+  if (isAdmin()) {
     return true
   }
   
@@ -48,18 +65,23 @@ export function hasLevel(requiredLevel) {
   
   const userLevel = userInfo.level || 1
   
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+  if (isAdmin()) {
     return true
   }
   
   return userLevel >= requiredLevel
 }
 
+export function isAdmin() {
+  const roles = store.getters.roles || []
+  return ADMIN_ROLES.some(role => roles.includes(role))
+}
+
 export function isSameDepartment(departmentId) {
   const userInfo = store.getters.userInfo
   if (!userInfo) return false
   
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+  if (isAdmin()) {
     return true
   }
   
@@ -67,10 +89,20 @@ export function isSameDepartment(departmentId) {
   return userDepartmentId === departmentId
 }
 
+export function getCurrentUserDepartmentId() {
+  const userInfo = store.getters.userInfo
+  return userInfo?.departmentId
+}
+
+export function getCurrentUserId() {
+  const userInfo = store.getters.userInfo
+  return userInfo?.id
+}
+
 export function canViewTicket(ticket) {
   if (!ticket) return false
   
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+  if (isAdmin()) {
     return true
   }
   
@@ -97,7 +129,7 @@ export function canViewTicket(ticket) {
 export function canEditTicket(ticket) {
   if (!ticket) return false
   
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+  if (isAdmin()) {
     return true
   }
   
@@ -114,28 +146,9 @@ export function canEditTicket(ticket) {
     return true
   }
   
-  if (hasPermission(['TICKET_EDIT', 'TICKET_ASSIGN', 'TICKET_EDIT_STATUS'])) {
-    if (isSameDepartment(ticket.department?.id)) {
-      return true
-    }
-  }
-  
-  return false
-}
-
-export function canAssignTicket(ticket) {
-  if (!ticket) return false
-  
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
-    return true
-  }
-  
-  if (!hasPermission('TICKET_ASSIGN')) {
-    return false
-  }
-  
   if (isSameDepartment(ticket.department?.id)) {
-    return true
+    const userLevel = userInfo.level || 1
+    return userLevel >= 2
   }
   
   return false
@@ -144,7 +157,7 @@ export function canAssignTicket(ticket) {
 export function canDeleteTicket(ticket) {
   if (!ticket) return false
   
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+  if (isAdmin()) {
     return true
   }
   
@@ -158,26 +171,107 @@ export function canDeleteTicket(ticket) {
   return false
 }
 
+export function canAssignTicket(ticket) {
+  if (!ticket) return false
+  
+  if (isAdmin()) {
+    return true
+  }
+  
+  const userInfo = store.getters.userInfo
+  if (!userInfo) return false
+  
+  if (isSameDepartment(ticket.department?.id)) {
+    const userLevel = userInfo.level || 1
+    return userLevel >= 2
+  }
+  
+  return false
+}
+
+export function canAccessBatchOperations() {
+  return isAdmin()
+}
+
+export function canAccessAdminRoutes() {
+  return isAdmin()
+}
+
 export function filterTicketList(tickets) {
   if (!tickets || tickets.length === 0) {
     return []
   }
   
-  if (hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+  if (isAdmin()) {
     return tickets
   }
   
   return tickets.filter(ticket => canViewTicket(ticket))
 }
 
-export function getCurrentUserDepartment() {
-  const userInfo = store.getters.userInfo
-  return userInfo?.departmentId
+export function checkApiAccess(path) {
+  if (!path) return { allowed: true }
+  
+  for (const batchPath of BATCH_OPERATION_PATHS) {
+    if (path.includes(batchPath)) {
+      if (!isAdmin()) {
+        return {
+          allowed: false,
+          message: '权限不足：批量处理功能仅管理员可使用'
+        }
+      }
+    }
+  }
+  
+  for (const adminRoute of ADMIN_ONLY_ROUTES) {
+    if (path.includes('/api' + adminRoute)) {
+      if (!isAdmin()) {
+        return {
+          allowed: false,
+          message: '权限不足：该功能仅管理员可访问'
+        }
+      }
+    }
+  }
+  
+  return { allowed: true }
 }
 
-export function getCurrentUserId() {
-  const userInfo = store.getters.userInfo
-  return userInfo?.id
+export function checkRouteAccess(route) {
+  if (!route) return { allowed: true }
+  
+  const path = route.path || route.fullPath || ''
+  
+  for (const adminRoute of ADMIN_ONLY_ROUTES) {
+    if (path.startsWith(adminRoute)) {
+      if (!isAdmin()) {
+        return {
+          allowed: false,
+          message: '权限不足：该页面仅管理员可访问'
+        }
+      }
+    }
+  }
+  
+  if (route.meta?.adminOnly) {
+    if (!isAdmin()) {
+      return {
+        allowed: false,
+        message: '权限不足：该页面仅管理员可访问'
+      }
+    }
+  }
+  
+  if (route.meta?.permission) {
+    if (!hasPermission(route.meta.permission)) {
+      return {
+        allowed: false,
+        message: '权限不足：您没有访问该页面的权限'
+      }
+    }
+  }
+  
+  return { allowed: true }
 }
 
 export const PermissionDirective = {
@@ -222,17 +316,58 @@ export const LevelDirective = {
   }
 }
 
+export const AdminOnlyDirective = {
+  inserted(el) {
+    if (!isAdmin()) {
+      el.parentNode && el.parentNode.removeChild(el)
+    }
+  }
+}
+
+export const TicketViewDirective = {
+  inserted(el, binding) {
+    const { value } = binding
+    
+    if (!value) {
+      return
+    }
+    
+    if (!canViewTicket(value)) {
+      el.parentNode && el.parentNode.removeChild(el)
+    }
+  }
+}
+
+export const TicketEditDirective = {
+  inserted(el, binding) {
+    const { value } = binding
+    
+    if (!value) {
+      return
+    }
+    
+    if (!canEditTicket(value)) {
+      el.parentNode && el.parentNode.removeChild(el)
+    }
+  }
+}
+
 export default {
   hasPermission,
   hasAllPermissions,
   hasRole,
   hasLevel,
+  isAdmin,
   isSameDepartment,
+  getCurrentUserDepartmentId,
+  getCurrentUserId,
   canViewTicket,
   canEditTicket,
-  canAssignTicket,
   canDeleteTicket,
+  canAssignTicket,
+  canAccessBatchOperations,
+  canAccessAdminRoutes,
   filterTicketList,
-  getCurrentUserDepartment,
-  getCurrentUserId
+  checkApiAccess,
+  checkRouteAccess
 }
