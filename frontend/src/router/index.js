@@ -1,6 +1,8 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
 import Layout from '@/layout/index.vue'
+import { getToken } from '@/utils/auth'
+import { hasPermission, hasRole } from '@/utils/permission'
 
 Vue.use(VueRouter)
 
@@ -59,8 +61,13 @@ const routes = [
         path: 'detail/:id',
         name: 'TicketDetail',
         component: () => import('@/views/ticket/detail.vue'),
-        meta: { title: '工单详情', permission: 'TICKET_VIEW' },
-        hidden: true
+        meta: { title: '工单详情', permission: 'TICKET_VIEW', hidden: true }
+      },
+      {
+        path: 'edit/:id',
+        name: 'TicketEdit',
+        component: () => import('@/views/ticket/edit.vue'),
+        meta: { title: '编辑工单', permission: 'TICKET_EDIT', hidden: true }
       },
       {
         path: 'my',
@@ -99,7 +106,7 @@ const routes = [
         path: 'config',
         name: 'ApprovalConfig',
         component: () => import('@/views/approval/config.vue'),
-        meta: { title: '审批流配置', permission: 'APPROVAL_CONFIG' }
+        meta: { title: '审批流配置', permission: 'APPROVAL_CONFIG', adminOnly: true }
       }
     ]
   },
@@ -108,13 +115,13 @@ const routes = [
     component: Layout,
     redirect: '/batch/process',
     name: 'Batch',
-    meta: { title: '批量处理', icon: 'el-icon-copy-document' },
+    meta: { title: '批量处理', icon: 'el-icon-copy-document', permission: 'TICKET_BATCH_ASSIGN', adminOnly: true },
     children: [
       {
         path: 'process',
         name: 'BatchProcess',
         component: () => import('@/views/batch/process.vue'),
-        meta: { title: '批量处理', permission: 'TICKET_BATCH_ASSIGN' }
+        meta: { title: '批量处理', permission: 'TICKET_BATCH_ASSIGN', adminOnly: true }
       }
     ]
   },
@@ -141,7 +148,7 @@ const routes = [
         path: 'config',
         name: 'ReportConfig',
         component: () => import('@/views/report/config.vue'),
-        meta: { title: '报表配置', permission: 'REPORT_CONFIG' }
+        meta: { title: '报表配置', permission: 'REPORT_CONFIG', adminOnly: true }
       }
     ]
   },
@@ -171,31 +178,31 @@ const routes = [
     component: Layout,
     redirect: '/system/user',
     name: 'System',
-    meta: { title: '系统管理', icon: 'el-icon-setting', permission: 'ROLE_ADMIN' },
+    meta: { title: '系统管理', icon: 'el-icon-setting', permission: 'ROLE_ADMIN', adminOnly: true },
     children: [
       {
         path: 'user',
         name: 'UserManage',
         component: () => import('@/views/system/user.vue'),
-        meta: { title: '用户管理', permission: 'ROLE_ADMIN' }
+        meta: { title: '用户管理', permission: 'ROLE_ADMIN', adminOnly: true }
       },
       {
         path: 'role',
         name: 'RoleManage',
         component: () => import('@/views/system/role.vue'),
-        meta: { title: '角色管理', permission: 'ROLE_ADMIN' }
+        meta: { title: '角色管理', permission: 'ROLE_ADMIN', adminOnly: true }
       },
       {
         path: 'department',
         name: 'DepartmentManage',
         component: () => import('@/views/system/department.vue'),
-        meta: { title: '部门管理', permission: 'ROLE_ADMIN' }
+        meta: { title: '部门管理', permission: 'ROLE_ADMIN', adminOnly: true }
       },
       {
         path: 'sla',
         name: 'SLAManage',
         component: () => import('@/views/system/sla.vue'),
-        meta: { title: 'SLA配置', permission: 'ROLE_ADMIN' }
+        meta: { title: 'SLA配置', permission: 'ROLE_ADMIN', adminOnly: true }
       }
     ]
   }
@@ -205,6 +212,53 @@ const router = new VueRouter({
   mode: 'history',
   base: process.env.BASE_URL,
   routes
+})
+
+const whiteList = ['/login', '/403', '/404']
+
+router.beforeEach(async (to, from, next) => {
+  const token = getToken()
+  
+  if (whiteList.includes(to.path)) {
+    if (to.path === '/login' && token) {
+      next({ path: '/' })
+    } else {
+      next()
+    }
+    return
+  }
+
+  if (!token) {
+    next({ path: '/login', query: { redirect: to.fullPath } })
+    return
+  }
+
+  const userInfo = store.getters.userInfo
+  if (!userInfo) {
+    try {
+      await store.dispatch('user/getCurrentUser')
+    } catch (error) {
+      await store.dispatch('user/logout')
+      next({ path: '/login', query: { redirect: to.fullPath } })
+      return
+    }
+  }
+
+  if (to.meta.adminOnly) {
+    if (!hasRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      next({ path: '/403' })
+      return
+    }
+  }
+
+  if (to.meta.permission) {
+    if (!hasPermission(to.meta.permission)) {
+      next({ path: '/403' })
+      return
+    }
+  }
+
+  next()
 })
 
 export default router
